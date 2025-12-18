@@ -5,8 +5,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: mysecretpassword
       MYSQL_DATABASE: notification_db
-      MYSQL_USER: user_notification
-      MYSQL_PASSWORD: user_password
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     ports:
       - "3306:3306"
     healthcheck:
