@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Real-Time</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Libs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            color: var(--text);
+        }
+
+        .card {
+            background: var(--card);
+            width: 100%;
+            max-width: 720px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+
+        .auth {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 8px;
+        }
+
+        .auth input {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #cbd5f5;
+            font-size: 0.95rem;
+        }
+
+        .auth button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .auth button:hover {
+            background: #4338ca;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .online {
+            background: var(--success);
+        }
+
+        .notifications {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .notification-item {
+            padding: 14px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border-left: 4px solid var(--success);
+            animation: slideIn 0.25s ease;
+        }
+
+        .notification-item strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .notification-item small {
+            color: var(--muted);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .auth {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.25rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>🔔 Notificações em Tempo Real</h1>
+
+    <div id="auth-section" class="auth">
+        <input type="text" id="username" placeholder="Usuário" value="user1">
+        <input type="password" id="password" placeholder="Senha" value="senha123">
+        <button onclick="login()">Conectar</button>
+    </div>
+
+    <div class="status">
+        <span id="dot" class="status-dot"></span>
+        <span id="status">Desconectado</span>
+    </div>
+
+    <ul id="notifications" class="notifications"></ul>
+</div>
+
+<script>
+    let stompClient = null;
+
+    async function login() {
+        const user = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
+        updateStatus('Autenticando...', false);
+
+        try {
+            const response = await fetch('http://localhost:8080/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+
+            if (!response.ok) {
+                throw new Error('Falha no login');
+            }
+
+            const data = await response.json();
+            connectWebSocket(data.token);
+        } catch (e) {
+            updateStatus(e.message, false);
+        }
+    }
+
+    function connectWebSocket(token) {
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient = Stomp.over(socket);
+        stompClient.debug = null;
+
+        stompClient.connect(
+            { Authorization: 'Bearer ' + token },
+            () => {
+                updateStatus('Online – aguardando eventos', true);
+                document.getElementById('auth-section').style.display = 'none';
+
+                stompClient.subscribe('/user/queue/notifications', (msg) => {
+                    renderMessage(JSON.parse(msg.body));
+                });
+            },
+            () => {
+                updateStatus('Erro na conexão WebSocket', false);
+            }
+        );
+    }
+
+    function updateStatus(text, online) {
+        document.getElementById('status').innerText = text;
+        document.getElementById('dot').classList.toggle('online', online);
+    }
+
+    function renderMessage(notif) {
+        const list = document.getElementById('notifications');
+        const item = document.createElement('li');
+        item.className = 'notification-item';
+        item.innerHTML = `
+            <strong>${notif.title ?? 'Nova Notificação'}</strong>
+            <div>${notif.content}</div>
+            <small>${new Date().toLocaleTimeString()}</small>
+        `;
+        list.prepend(item);
+    }
+</script>
+
+</body>
+</html>

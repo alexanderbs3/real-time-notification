@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: realtime-notification
+
+  # Configuração do Banco de Dados
+  datasource:
+    url: jdbc:mysql://localhost:3306/notification_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: user_notification
+    password: user_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Configuração do JPA/Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.MySQLDialect
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Configuração do Kafka (Mapeado dentro de spring)
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: group_notifications
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# Configurações customizadas da aplicação (JWT)
+# Certifique-se que o JwtService busca exatamente este caminho
+application:
+  security:
+    jwt:
+      secret-key: NTkwOWQ1MjkzMDI3M2ZhYTc2Nzc0M2QzNmIwN2UxZTQwMGU0NmE1ZjE1OTI2MjU0NDMyYmFmZGE2ZmIwZmI3YQ==
+      expiration: 86400000
+
+# Configuração de Logging
+logging:
+  level:
+    root: INFO
+    br.leetjouney.realtimenotification: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
